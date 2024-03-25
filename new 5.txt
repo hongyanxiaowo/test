@@ -1,0 +1,90 @@
+void TriangulateBy2View(const StereoVisionPara& steroPara,
+                        const pt2_s& pts0, const pt2_s& pts1, pt3_s& spacePts) {
+    // 匹配同名点
+    for (const auto& pt0: pts0) {
+        for (const auto& pt1: pts1) {
+            if (pt0.first == pt1.first)  // 同名点
+            {
+                std::vector<cv::Point2f> cvPts0, cvPts1, cvUdPts0, cvUdPts1;
+                
+                cvPts0.push_back(cv::Point2f(pt0.second.x, pt0.second.y));
+                cvPts1.push_back(cv::Point2f(pt1.second.x, pt1.second.y));
+                
+                cv::undistortPoints(cvPts0, cvUdPts0, steroPara.m_K0, steroPara.m_D0, cv::noArray(),
+                                    steroPara.m_K0);
+                cv::undistortPoints(cvPts1, cvUdPts1, steroPara.m_K1, steroPara.m_D1, cv::noArray(),
+                                    steroPara.m_K1);
+                
+                // 加不加效果变化不大
+                
+                // 极线
+                std::vector<cv::Vec<float, 3>> epilines;
+                cv::computeCorrespondEpilines(cvUdPts0, 1, steroPara.m_F, epilines);
+                float a = epilines[0][0];
+                float b = epilines[0][1];
+                float c = epilines[0][2];
+                float fEpiError1 = GetDistFromPtToLine(epilines[0], cvUdPts1[0]);
+                
+                cv::Point2f cvUdPts1_cuizhutmp = findPerpendicularFoot(epilines[0], cvUdPts1[0]);
+                std::vector<cv::Point2f> cvUdPts1_cuizhu;
+                cvUdPts1_cuizhu.push_back(cvUdPts1_cuizhutmp);
+                
+                cv::computeCorrespondEpilines(cvUdPts1, 2, steroPara.m_F, epilines);
+                a = epilines[0][0];
+                b = epilines[0][1];
+                c = epilines[0][2];
+                float fEpiError2 = GetDistFromPtToLine(epilines[0], cvUdPts0[0]);
+                
+                cv::Point2f cvUdPts0_cuizhuTmp = findPerpendicularFoot(epilines[0], cvUdPts0[0]);
+                std::vector<cv::Point2f> cvUdPts0_cuizhu;
+                cvUdPts0_cuizhu.push_back(cvUdPts0_cuizhuTmp);
+                
+                cv::Mat HomoPts, dstPts;
+                cv::triangulatePoints(steroPara.m_P0, steroPara.m_P1, cvUdPts0, cvUdPts1, HomoPts);
+                cv::transpose(HomoPts, HomoPts);
+                cv::convertPointsFromHomogeneous(HomoPts, dstPts);
+    
+                // 原始坐标系下的点
+                cv::Point3d tmp = cv::Point3d(dstPts.at<float>(0, 0), dstPts.at<float>(0, 1),
+                                              dstPts.at<float>(0, 2));
+    
+    
+               HomoPts, dstPts;
+                cv::triangulatePoints(steroPara.m_P0, steroPara.m_P1, cvUdPts0, cvUdPts1_cuizhu, HomoPts);
+                cv::transpose(HomoPts, HomoPts);
+                cv::convertPointsFromHomogeneous(HomoPts, dstPts);
+                cv::Point3d tmp2 = cv::Point3d(dstPts.at<float>(0, 0), dstPts.at<float>(0, 1),
+                                              dstPts.at<float>(0, 2));
+    
+                HomoPts, dstPts;
+                cv::triangulatePoints(steroPara.m_P0, steroPara.m_P1, cvUdPts0_cuizhu, cvUdPts1, HomoPts);
+                cv::transpose(HomoPts, HomoPts);
+                cv::convertPointsFromHomogeneous(HomoPts, dstPts);
+                cv::Point3d tmp3 = cv::Point3d(dstPts.at<float>(0, 0), dstPts.at<float>(0, 1),
+                                              dstPts.at<float>(0, 2));
+    
+    
+    
+                // 计算重投影点
+                std::vector<cv::Point2f> reprojPts0, reprojPts1;
+                cv::projectPoints(dstPts, steroPara.m_R0, steroPara.m_T0, steroPara.m_K0, cv::Mat(), reprojPts0);
+                cv::projectPoints(dstPts, steroPara.m_R1, steroPara.m_T1, steroPara.m_K1, cv::Mat(), reprojPts1);
+                std::cout << pt0.first << " " << fEpiError1 << " " << fEpiError2 << " " << reprojPts0[0] - cvUdPts0[0] << " " << reprojPts1[0] - cvUdPts1[0] <<
+                " "<<tmp-tmp2<<" "<<tmp-tmp3<< std::endl;
+                
+                
+                
+                
+             
+                // 变化到立体校正坐标系下
+                cv::Mat T1 = (cv::Mat_<double>(1, 3) << 0, 0, 0);
+                CRT stereoRt;
+                Opencv2CRT(steroPara.m_stereoR0, T1, stereoRt);
+                cv::Point3d tmp4 = stereoRt(tmp);
+                
+                spacePts.insert(make_pair(pt0.first, tmp2));
+                break;
+            }
+        }
+    }
+    }
